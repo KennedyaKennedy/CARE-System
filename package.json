@@ -1,0 +1,49 @@
+{
+  "name": "care-system",
+  "version": "4.1.9",
+  "description": "C.A.R.E. - Cognitive Assistance and Response Engine",
+  "main": "main.js",
+  "author": "ELP-03 Research Facility",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable --x64",
+    "build:dir": "electron-builder --win dir --x64"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.care.system",
+    "productName": "CARE System",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "CARESYS.html",
+      "care-*.js",
+      "assets/**/*",
+      "icon.ico"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "CARE-System-${version}.exe"
+    },
+    "extraResources": [
+      {
+        "from": "assets/music",
+        "to": "music",
+        "filter": ["**/*.mp3", "**/*.ogg"]
+      }
+    ]
+  }
+}
