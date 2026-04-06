@@ -21,6 +21,7 @@ const CareEvents = (() => {
 
   // Add an event
   function addEvent(state, evt, elements, print, updateEventUI) {
+    if (!evt) return;
     if (state.events.active.length >= state.config.events.maxActive) return;
     state.events.active.push(evt);
     updateEventUI(state, elements);
@@ -61,18 +62,30 @@ const CareEvents = (() => {
     return true;
   }
 
+  // Clear all event timers (bulk cleanup)
+  function clearAllEventTimers(state) {
+    state.events.active.forEach(evt => {
+      if (evt._timer) clearInterval(evt._timer);
+      if (evt._timeout) clearTimeout(evt._timeout);
+    });
+    state.events.active = [];
+  }
+
   // Update event UI
   function updateEventUI(state, elements) {
+    if (!elements || !elements.eventCountEl) return;
     const count = state.events.active.length;
     elements.eventCountEl.textContent = count;
-    elements.eventCountToolbarEl.textContent = count;
+    if (elements.eventCountToolbarEl) elements.eventCountToolbarEl.textContent = count;
 
     const hasCrit = state.events.active.some(e => e.severity === 'crit');
     const hasWarn = state.events.active.some(e => e.severity === 'warn');
 
-    elements.ledCrit.className = 'xp-status-led ' + (hasCrit ? 'led-red led-blink' : 'led-off');
-    elements.ledWarn.className = 'xp-status-led ' + (!hasCrit && hasWarn ? 'led-yellow led-blink' : 'led-off');
-    elements.ledOk.className = 'xp-status-led ' + (!hasCrit && !hasWarn ? 'led-green' : 'led-off');
+    if (elements.ledCrit) elements.ledCrit.className = 'xp-status-led ' + (hasCrit ? 'led-red led-blink' : 'led-off');
+    if (elements.ledWarn) elements.ledWarn.className = 'xp-status-led ' + (!hasCrit && hasWarn ? 'led-yellow led-blink' : 'led-off');
+    if (elements.ledOk) elements.ledOk.className = 'xp-status-led ' + (!hasCrit && !hasWarn ? 'led-green' : 'led-off');
+
+    if (!elements.eventListEl) return;
 
     if (count === 0) {
       elements.eventListEl.innerHTML = '<div style="color:#888;font-style:italic;">No active events</div>';
@@ -118,6 +131,7 @@ const CareEvents = (() => {
     const generators = [
       () => {
         const file = pick(state.fs.files);
+        if (!file) return null;
         return {
           id: eventId(state), category: 'FILE-SYSTEM', severity: 'warn',
           title: `CRC MISMATCH: ${file.name}`,
@@ -264,7 +278,11 @@ const CareEvents = (() => {
       }));
     }
 
-    addEvent(state, pick(generators), elements, print, updateEventUI);
+    const generator = pick(generators);
+    if (!generator) return;
+    const evt = generator();
+    if (!evt) return;
+    addEvent(state, evt, elements, print, updateEventUI);
 
     // Speed up next event if suspicion is high
     const mod = state.care.suspicionLevel > 50 ? 0.5 : 1.0;
@@ -272,7 +290,7 @@ const CareEvents = (() => {
     state.events.nextAt = Date.now() + jitter;
   }
 
-  return { SEVERITY, eventId, addEvent, resolveEvent, updateEventUI, scheduleNextEvent, maybeTriggerEvent };
+  return { SEVERITY, eventId, addEvent, resolveEvent, updateEventUI, scheduleNextEvent, maybeTriggerEvent, clearAllEventTimers };
 })();
 
 window.CareEvents = CareEvents;

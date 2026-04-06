@@ -14,7 +14,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false
+      webSecurity: true
     }
   });
   win.loadFile('CARESYS.html');
@@ -31,8 +31,9 @@ app.on('activate', () => {
 });
 
 ipcMain.handle('llm-request', async (event, body) => {
+  const endpoint = process.env.LLM_ENDPOINT || 'http://localhost:1234';
   try {
-    const res = await fetch('http://169.254.83.107:1234/v1/chat/completions', {
+    const res = await fetch(`${endpoint}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)

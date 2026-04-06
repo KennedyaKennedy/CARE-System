@@ -9,6 +9,7 @@ const CareAudio = (() => {
   let noiseBuffer = null;
   let endingMusic = null;
   let ambientMusic = null;
+  let initialized = false;
 
   const endingTracks = {
     good:     { file: 'ending_good.mp3',     volume: 0.5 },
@@ -23,11 +24,16 @@ const CareAudio = (() => {
     if (ctx) return true;
     try {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
+      initialized = true;
       return true;
     } catch (e) {
       console.warn('Audio context not supported:', e);
       return false;
     }
+  }
+
+  function isInitialized() {
+    return initialized;
   }
 
   function createNoiseBuffer() {
@@ -77,7 +83,8 @@ const CareAudio = (() => {
   }
 
   function playClick() {
-    if (!ctx || ctx.state === 'suspended') return;
+    if (!init()) return;
+    if (ctx.state === 'suspended') return;
     const now = ctx.currentTime;
 
     const noise = ctx.createBufferSource();
@@ -110,7 +117,8 @@ const CareAudio = (() => {
   }
 
   function playProcess() {
-    if (!ctx || ctx.state === 'suspended') return;
+    if (!init()) return;
+    if (ctx.state === 'suspended') return;
     const now = ctx.currentTime;
     // Short bursts of noise to simulate HDD seeks
     for (let i = 0; i < 5; i++) {
@@ -222,7 +230,7 @@ const CareAudio = (() => {
     }
   }
 
-  return { playBoot, playClick, playProcess, startAmbient, resume, playEndingMusic, stopEndingMusic, stopAmbient };
+  return { playBoot, playClick, playProcess, startAmbient, resume, playEndingMusic, stopEndingMusic, stopAmbient, isInitialized };
 })();
 
 window.CareAudio = CareAudio;

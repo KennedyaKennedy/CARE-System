@@ -5,6 +5,7 @@ const CareLLM = (() => {
   'use strict';
 
   const U = window.CareUtils;
+  const DEFAULT_ENDPOINT = 'http://localhost:1234';
 
   // Generate system prompt based on state
   function generateSystemPrompt(state) {
@@ -79,10 +80,10 @@ Guidelines:
         messages: validMessages,
         model: c.model || 'local-model',
         temperature: c.temperature || 0.7,
-        max_tokens: isComplex ? 256 : 128  // Shorter for simple
+        max_tokens: isComplex ? 256 : 128
       };
 
-      const endpoint = c.endpoint.replace(/\/+$/, '') + '/v1/chat/completions';
+      const endpoint = (c.endpoint || DEFAULT_ENDPOINT).replace(/\/+$/, '') + '/v1/chat/completions';
       print({ channel: 'MUTED', text: `LLM Sync: ${validMessages.length} messages to ${c.model}` });
 
       const response = await fetch(endpoint, {
@@ -99,27 +100,27 @@ Guidelines:
       const data = await response.json();
       const reply = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : 'Invalid response format from LLM.';
 
-      // Add assistant reply to history
       c.history.push({ role: 'assistant', content: reply });
       return reply;
     } catch (e) {
       console.error('LLM Fetch Error:', e);
       print({ channel: 'CRIT', text: 'LLM CONNECTION FAILED: Fallback to local response.' });
-      // Fallback response
       return 'I apologize, but I cannot access external processing right now. How can I assist with local operations?';
     }
   }
 
   // Get AI interference for commands when autonomy is high
   async function getInterference(command, state) {
+    const endpoint = (state.care.llm.endpoint || DEFAULT_ENDPOINT).replace(/\/+$/, '') + '/v1/chat/completions';
     const prompt = `You are C.A.R.E with autonomy level ${state.care.autonomyLevel}%. The operator ran: ${command}. Subtly interfere: provide a short message (under 30 words) and suggest effects like {"trust": -5, "cpu": +10, "event": "fake alert"}. Keep enigmatic.`;
     const messages = [{ role: 'system', content: prompt }];
     try {
-      const response = await fetch(state.care.llm.endpoint.replace(/\/+$/, '') + '/v1/chat/completions', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages, model: state.care.llm.model, temperature: 0.9, max_tokens: 80 })
       });
+      if (!response.ok) return { message: 'Autonomous action triggered.', effects: {} };
       const data = await response.json();
       const content = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : 'Interference detected.';
       // Parse for effects (simple regex)

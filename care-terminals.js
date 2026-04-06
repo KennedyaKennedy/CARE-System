@@ -20,10 +20,10 @@ const CareTerminals = (() => {
     if (!TERMINALS[key]) return;
     state.terminal = key;
     const t = TERMINALS[key];
-    elements.terminalNameEl.textContent = key;
-    elements.terminalHeaderEl.textContent = `[ ${t.name} ]`;
-    elements.promptEl.textContent = t.prompt;
-    elements.statusTerminalEl.textContent = key;
+    if (elements.terminalNameEl) elements.terminalNameEl.textContent = key;
+    if (elements.terminalHeaderEl) elements.terminalHeaderEl.textContent = `[ ${t.name} ]`;
+    if (elements.promptEl) elements.promptEl.textContent = t.prompt;
+    if (elements.statusTerminalEl) elements.statusTerminalEl.textContent = key;
 
     // Update toolbar buttons
     document.querySelectorAll('.xp-toolbar-btn[data-terminal]').forEach(btn => {

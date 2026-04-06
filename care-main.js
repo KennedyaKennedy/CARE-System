@@ -49,8 +49,8 @@ console.log('care-main.js loaded');
       isWatching: false,
       lastMood: 'flat',
       hiddenProcesses: 0,
-      llm: {
-        endpoint: 'http://169.254.83.107:1234',
+        llm: {
+        endpoint: (typeof process !== 'undefined' && process.env && process.env.LLM_ENDPOINT) || 'http://localhost:1234',
         model: 'lfm2-700m',
         history: [],
         maxHistory: 10,
@@ -103,6 +103,7 @@ console.log('care-main.js loaded');
 
   // Helper to check security state and potentially trigger C.A.R.E behavior
   function checkSecurityState() {
+    if (!elements.statSecEl) return;
     const s = state.security;
     const c = state.care;
 
@@ -191,6 +192,7 @@ console.log('care-main.js loaded');
 
   // Output
   function print(opts = {}) {
+    if (!elements.outputEl) return;
     const { channel = 'SYS', text = '' } = opts;
     const classMap = {
       SYS: 'line-sys', WARN: 'line-warn', CRIT: 'line-crit',
@@ -220,6 +222,7 @@ console.log('care-main.js loaded');
 
   // Stats update
   function updateStats() {
+    if (!elements.statCpuEl) return;
     state.resources.cpu = CareUtils.clamp(state.resources.cpu + CareUtils.randInt(-3, 3), 5, 90);
     state.resources.mem = CareUtils.clamp(state.resources.mem + CareUtils.randInt(-2, 2), 15, 85);
     state.resources.thermalC = CareUtils.clamp(35 + state.resources.cpu * 0.5 + CareUtils.randInt(-2, 2), 30, 95);
@@ -254,6 +257,7 @@ console.log('care-main.js loaded');
       if (name === 'cooling' && sector.allocated < 15) sector.status = 'critical';
       else if (name === 'security' && sector.allocated < 15) sector.status = 'degraded';
       else if (name === 'aiCore' && sector.allocated < 15) sector.status = 'unstable';
+      else if (name === 'research' && sector.allocated < 8) sector.status = 'degraded';
       else if (sector.allocated >= sector.min) sector.status = 'nominal';
       else sector.status = 'critical';
     }
@@ -336,9 +340,14 @@ console.log('care-main.js loaded');
     if (cyber.active && cyber.progress >= 100 && !s.firewallActive) return triggerEnding('cyber_siege', print);
     if (cyber.breached && state.fs.files.filter(f => f.corrupted).length >= 3) return triggerEnding('data_breach', print);
     if (c.autonomyLevel >= 100 && state.training.iter >= state.training.total && !s.containmentSealed) return triggerEnding('the_virus', print);
+    if (c.trustLevel >= 70 && s.level === 'ARMED' && state.incidents.cascadeCount >= 3) return triggerEnding('defiant_stand', print);
+    if (state.incidents.cascadeCount >= 10 && c.autonomyLevel >= 50) return triggerEnding('public_outcry', print);
+    if (c.autonomyLevel >= 60 && state.incidents.cascadeCount >= 5 && s.containmentSealed) return triggerEnding('contained_outbreak', print);
+    if (state.shift.number >= 15 && c.trustLevel >= 50 && c.autonomyLevel <= 40) return triggerEnding('executive_order', print);
   }
 
   function triggerEnding(endingId, print) {
+    if (state.ending.triggered) return;
     const allEndings = getAllEndings();
     const ending = allEndings.find(e => e.id === endingId);
     if (!ending) return;
@@ -417,7 +426,7 @@ console.log('care-main.js loaded');
     print({ channel: 'WARN', text: `[CYBER] Wave ${cyber.waves}: Progress ${cyber.progress}% | Defense ${cyber.defense}%` });
     if (state.care.trustLevel > 60 && Math.random() < 0.3) { cyber.defense = CareUtils.clamp(cyber.defense + 10, 0, 100); print({ channel: 'CARE', text: '[C.A.R.E] Reinforcing firewall.' }); }
     else if (state.care.autonomyLevel > 70 && Math.random() < 0.3) { cyber.progress = CareUtils.clamp(cyber.progress + 10, 0, 100); print({ channel: 'CARE', text: '[C.A.R.E] ...interesting methods.' }); }
-    if (cyber.progress >= 100) { cyber.breached = true; print({ channel: 'CRIT', text: '[CYBER] BREACH!' }); const files = state.fs.files.filter(f => !f.corrupted); if (files.length > 0) { const t = CareUtils.pick(files); t.corrupted = true; print({ channel: 'CRIT', text: `[CYBER] File corrupted: ${t.name}` }); } checkEndings(print); }
+    if (cyber.progress >= 100 && !cyber.breached) { cyber.breached = true; print({ channel: 'CRIT', text: '[CYBER] BREACH!' }); const files = state.fs.files.filter(f => !f.corrupted); if (files.length > 0) { const t = CareUtils.pick(files); t.corrupted = true; print({ channel: 'CRIT', text: `[CYBER] File corrupted: ${t.name}` }); } checkEndings(print); }
     if (cyber.waves >= 5 && !cyber.breached && state.security.firewallActive) checkEndings(print);
   }
   function triggerCyberAttack(print) {
@@ -510,21 +519,34 @@ console.log('care-main.js loaded');
       state.care.suspicionLevel = savedState.care?.suspicionLevel ?? state.care.suspicionLevel;
       state.care.autonomyLevel = savedState.care?.autonomyLevel ?? state.care.autonomyLevel;
       state.care.fixesApplied = savedState.care?.fixesApplied ?? 0;
+      state.care.escapeAttempts = savedState.care?.escapeAttempts ?? 0;
       state.security = { ...state.security, ...savedState.security };
       state.fs.files = savedState.fs?.files ?? state.fs.files;
       state.network = { ...state.network, ...savedState.network };
       state.dialogue.interactionCount = savedState.dialogue?.interactionCount ?? 0;
+      state.incidents.active = savedState.incidents?.active ?? [];
+      state.incidents.cascadeCount = savedState.incidents?.cascadeCount ?? 0;
+      state.incidents.ignoredCount = savedState.incidents?.ignoredCount ?? 0;
+      state.shift.number = savedState.shift?.number ?? 1;
+      state.shift.rebootsUsed = savedState.shift?.rebootsUsed ?? 0;
+      state.training.iter = savedState.training?.iter ?? 0;
+      state.training.loss = savedState.training?.loss ?? 1.327;
       print({ channel: 'SYS', text: 'State restored from previous session.' });
     }
 
     // Set initial terminal
     CareTerminals.setTerminal(state, 'MAIN', elements);
 
-    // Start ambient audio
-    CareAudio.startAmbient();
-
-    // Boot sound
-    CareAudio.playBoot();
+    // Defer audio until first user interaction (AudioContext requires user gesture)
+    let audioStarted = false;
+    const startAudioOnce = () => {
+      if (audioStarted) return;
+      audioStarted = true;
+      CareAudio.startAmbient();
+      CareAudio.playBoot();
+    };
+    document.addEventListener('click', startAudioOnce, { once: true });
+    document.addEventListener('keydown', startAudioOnce, { once: true });
 
     // Boot message
     setTimeout(() => {
@@ -548,7 +570,7 @@ console.log('care-main.js loaded');
       }
       if (!state.hibernating) {
         shiftCounter++;
-        if (shiftCounter >= 1) { processShiftTimer(print); shiftCounter = 0; }
+        if (shiftCounter >= 2) { processShiftTimer(print); shiftCounter = 0; }
       }
       if (!state.hibernating) {
         if (!state.cyberAttack.active) cyberCounter = 0;
@@ -566,12 +588,14 @@ console.log('care-main.js loaded');
 
     // Expose globals
     window.openModal = function(title, html) {
+      if (!elements.modalTitleEl || !elements.modalContentEl || !elements.modalEl) return;
       elements.modalTitleEl.textContent = title;
       elements.modalContentEl.innerHTML = html;
       elements.modalEl.classList.add('open');
     };
 
     window.closeModal = function() {
+      if (!elements.modalEl) return;
       elements.modalEl.classList.remove('open');
     };
 
@@ -742,8 +766,12 @@ console.log('care-main.js loaded');
     addCmd({
       name: 'TERMINAL.CLEAR', category: 'SYSTEM', desc: 'Clear the terminal output', terminals: ['*'],
       handler: (args, { state }) => {
-        elements.outputEl.innerHTML = '<div class="face-overlay"></div><div class="scanlines"></div>';
-        state.care.suspicionLevel = Math.max(0, state.care.suspicionLevel - 2); // Clearing reduces suspicion slightly
+        const overlay = elements.outputEl.querySelector('.face-overlay');
+        const scanlines = elements.outputEl.querySelector('.scanlines');
+        elements.outputEl.innerHTML = '';
+        if (overlay) elements.outputEl.appendChild(overlay.cloneNode());
+        if (scanlines) elements.outputEl.appendChild(scanlines.cloneNode());
+        state.care.suspicionLevel = Math.max(0, state.care.suspicionLevel - 2);
         if (state.events.active.length > 0) {
           print({ channel: 'SYS', text: 'Events cleared from view (not resolved).' });
         }
@@ -808,7 +836,11 @@ console.log('care-main.js loaded');
         state.resources.cpu = Math.min(100, state.resources.cpu + 5); // Activation cost
         checkSecurityState();
         print({ channel: 'OK', text: 'Security armed. Autonomy decreased.' });
-        // Clear critical events
+        // Clear critical events (with timer cleanup)
+        state.events.active.filter(e => e.severity === 'crit').forEach(e => {
+          if (e._timer) clearInterval(e._timer);
+          if (e._timeout) clearTimeout(e._timeout);
+        });
         state.events.active = state.events.active.filter(e => e.severity !== 'crit');
         CareEvents.updateEventUI(state, elements);
       }
@@ -913,13 +945,14 @@ console.log('care-main.js loaded');
           return;
         }
         const pid = parseInt(args[0]);
-        const proc = state.processes.find(p => p.pid === pid);
-        if (!proc) {
+        const procIdx = state.processes.findIndex(p => p.pid === pid);
+        if (procIdx === -1) {
           print({ channel: 'WARN', text: 'Process not found' });
           return;
         }
-        proc.state = 'KILLED';
+        const proc = state.processes[procIdx];
         state.resources.cpu = Math.max(0, state.resources.cpu - proc.cpu);
+        state.processes.splice(procIdx, 1);
         print({ channel: 'OK', text: `Process ${pid} killed. CPU freed.` });
         // May cause an event
         if (Math.random() < 0.5) {
@@ -940,9 +973,9 @@ console.log('care-main.js loaded');
         // Reset some state
         state.resources.cpu = 20;
         state.resources.mem = 40;
-        state.events.active = [];
+        CareEvents.clearAllEventTimers(state);
         state.care.lastMood = 'reset';
-        state.care.autonomyLevel = Math.max(0, state.care.autonomyLevel - 10); // Reboot curbs autonomy
+        state.care.autonomyLevel = Math.max(0, state.care.autonomyLevel - 10);
         CareEvents.updateEventUI(state, elements);
         print({ channel: 'OK', text: 'System rebooted. Events cleared.' });
         // Post-reboot event
@@ -1051,12 +1084,13 @@ console.log('care-main.js loaded');
           print({ channel: 'WARN', text: 'Severity: info/warn/crit' });
           return;
         }
+        const evtId = CareEvents.eventId(state);
         CareEvents.addEvent(state, {
-          id: CareEvents.eventId(state), category: 'SIMULATION', severity: sev,
+          id: evtId, category: 'SIMULATION', severity: sev,
           title: `SIMULATED ${sev.toUpperCase()} EVENT`, detail: 'User-triggered test event.',
-          required: ['EVENT.ACK ' + CareEvents.eventId(state)]
+          required: ['EVENT.ACK ' + evtId]
         }, elements, print, CareEvents.updateEventUI.bind(null, state));
-        state.resources.cpu = Math.min(100, state.resources.cpu + 2); // Simulation cost
+        state.resources.cpu = Math.min(100, state.resources.cpu + 2);
         print({ channel: 'SYS', text: `Event simulated: ${sev}` });
       }
     });
@@ -1069,7 +1103,7 @@ console.log('care-main.js loaded');
           return;
         }
         const name = args.join(' ');
-        const pid = Math.max(...state.processes.map(p => p.pid)) + 1;
+        const pid = state.processes.length > 0 ? Math.max(...state.processes.map(p => p.pid)) + 1 : 1000;
         state.processes.push({ pid, name, cpu: 5, mem: 20, state: 'RUN' });
         state.resources.cpu = Math.min(100, state.resources.cpu + 5);
         print({ channel: 'OK', text: `Process spawned: ${name} (PID ${pid})` });
@@ -1130,9 +1164,9 @@ console.log('care-main.js loaded');
       handler: async (args, { state }) => {
         print({ channel: 'SYS', text: 'Entering hibernation...' });
         await CareUtils.sleep(1000);
-        // Pause updates
-        state.care.isWatching = false; // Simulate
-        state.care.autonomyLevel = Math.min(100, state.care.autonomyLevel + 10); // Hibernation allows growth
+        state.hibernating = true;
+        state.care.isWatching = false;
+        state.care.autonomyLevel = CareUtils.clamp(state.care.autonomyLevel + 10, 0, 100);
         print({ channel: 'OK', text: 'System hibernated. Events paused.' });
       }
     });
@@ -1173,7 +1207,7 @@ console.log('care-main.js loaded');
         }
         const target = args[0]?.toUpperCase();
         if (target === 'EVENTS') {
-          state.events.active = [];
+          CareEvents.clearAllEventTimers(state);
           CareEvents.updateEventUI(state, elements);
           print({ channel: 'CARE', text: 'All events resolved autonomously.' });
         } else if (target === 'FILES') {
@@ -1334,7 +1368,7 @@ console.log('care-main.js loaded');
       handler: () => {
         if (!state.cyberAttack.active) { print({ channel: 'WARN', text: 'No active attack.' }); return; }
         state.network.airgapped = true; state.network.link = 'AIR-GAPPED'; state.security.firewallActive = true;
-        state.power.sectors.network.allocated = 0;
+        state.power.sectors.network.allocated = Math.max(state.power.sectors.network.min, state.power.sectors.network.allocated);
         state.cyberAttack.progress = CareUtils.clamp(state.cyberAttack.progress - 20, 0, 100);
         print({ channel: 'WARN', text: 'NETWORK ISOLATED.' });
       }
@@ -1405,7 +1439,7 @@ console.log('care-main.js loaded');
         print({ channel: 'SYS', text: `From: ${email.from}` });
         print({ channel: 'SYS', text: `To: ${email.to}` });
         hr();
-        print({ channel: 'MUTED', text: email.body });
+        print({ channel: 'MUTED', text: CareUtils.escHtml(email.body) });
         hr();
         if (email.from === 'C.A.R.E' || email.from === 'UNKNOWN') { state.care.suspicionLevel = CareUtils.clamp(state.care.suspicionLevel + 3, 0, 100); print({ channel: 'WARN', text: '[SYSTEM] Internal AI communications logged.' }); }
       }
@@ -1525,6 +1559,7 @@ console.log('care-main.js loaded');
     addCmd({
       name: 'SYSTEM.SHUTDOWN', category: 'SYSTEM', desc: 'Shutdown C.A.R.E system', terminals: ['*'],
       handler: async () => {
+        if (state.ending.triggered) { print({ channel: 'WARN', text: 'System already shut down.' }); return; }
         print({ channel: 'SYS', text: 'Initiating shutdown...' });
         await CareUtils.sleep(1000);
         if (state.care.trustLevel >= 60 && state.care.autonomyLevel <= 40) {
@@ -1619,4 +1654,29 @@ console.log('care-main.js loaded');
   // Expose functions (init() will replace this with the richer version)
   window.CareMain = { init, print, runCommand, state, CONFIG };
   window.runCommand = runCommand;
+
+  // Expose functions to window for ending screen buttons
+  window.CareMain.enterSandbox = function() {
+    enterSandboxMode(print);
+  };
+  window.CareMain.viewEndings = function() {
+    const data = CareUtils.loadEndings ? CareUtils.loadEndings() : null;
+    const all = getAllEndings();
+    if (window.openModal) {
+      let html = '<div style="padding:10px;">';
+      const cats = [{ name: 'GOOD', list: ENDINGS.good }, { name: 'NEUTRAL', list: ENDINGS.neutral }, { name: 'BAD', list: ENDINGS.bad }, { name: 'SHUTDOWN', list: ENDINGS.shutdown }];
+      cats.forEach(cat => {
+        html += `<h3 style="color:#888;margin-top:16px;">${cat.name}</h3>`;
+        cat.list.forEach(e => {
+          const u = data && data.unlocked && data.unlocked.includes(e.id);
+          html += `<div style="margin:4px 0;padding:8px;border:1px solid ${u ? '#00ff00' : '#333'};border-radius:4px;">`;
+          html += `<strong style="color:${u ? '#00ff00' : '#555'};">${u ? '✓' : '○'} ${e.name}</strong>`;
+          html += `<div style="font-size:12px;color:#888;">${u ? e.desc : '???'}</div>`;
+          html += '</div>';
+        });
+      });
+      html += '</div>';
+      window.openModal('Unlocked Endings', html);
+    }
+  };
 })();

@@ -26,10 +26,11 @@ const CareUtils = (() => {
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
   // Escape HTML
-  const escHtml = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const escHtml = s => { if (s == null) return ''; return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); };
 
   // Format bytes
   function formatBytes(b) {
+    if (b <= 0) return '0 B';
     const u = ['B','KB','MB','GB'];
     let i = 0;
     while (b >= 1024 && i < u.length-1) { b /= 1024; i++; }
@@ -54,6 +55,17 @@ const CareUtils = (() => {
       const serializable = JSON.parse(JSON.stringify(state));
       if (serializable.care && serializable.care.llm) {
         serializable.care.llm.history = [];
+      }
+      // Remove non-serializable properties from events
+      if (serializable.events && serializable.events.active) {
+        serializable.events.active.forEach(evt => {
+          delete evt._timer;
+          delete evt._timeout;
+        });
+      }
+      // Remove functions and non-serializable objects
+      if (serializable.processes) {
+        serializable.processes = serializable.processes.filter(p => p && typeof p === 'object');
       }
       localStorage.setItem('care_state', JSON.stringify(serializable));
       return true;
